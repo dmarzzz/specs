@@ -23,13 +23,13 @@
 
 ## Overview
 
-The following provides several options of the Builder API within the Optimism stack. It provides the advantages and disadvantages of the different Sequencer Builder interactions.
+The following provides several options of the Builder API within the Optimism stack. It outlines the advantages and disadvantages of different Sequencer Builder interactions.
 
-## Op-node <> Op-geth
+## Op-node <> Op-geth (payload attributes stream)
 
 ### Requesting a Block
 
-In this approach the op-node on the proposer side requests the block from the block builder's execution engine. A block is requested from both the proposer's local execution engine and the block builder in parallel.
+In this approach the op-node on the proposer side requests the block from the block builder's op-geth. A block is requested from both the proposer's local execution engine and the block builder in parallel.
 
 The proposer validates the blocks and can fall back to its local block if the block builder block is invalid.
 
@@ -37,15 +37,32 @@ The proposer validates the blocks and can fall back to its local block if the bl
  
 The block payload attributes is required to build a block on top of the latest head. In this approach the builder runs a synced op-node that provides a payload attributes event stream for op-geth to subscribe to.
 
-While the op-node can provide the payload attributes via the fork choice update, this method would propagate the builder block via p2p.
-
 ![Op-node <> Op-geth Interaction](op_node_op_geth.png)
 
 **Advantages:**
 * Better latency as the proposer queries the builder payload directly from the builder's op-geth
 
 **Disadvantages:**
-* Modifications to both op-node and op-geth to support this method. On the proposer side, this requires modifications to the op-node to make the builder API request. The the builder side, modifications to op-geth and op-node are needed to stream the payload attributes and handle the builder API request.
+* Modifications to both op-node and op-geth to support this method. On the proposer side, this requires modifications to op-node to make the builder API request. The the builder side, modifications to op-geth and op-node are needed to stream the payload attributes and handle the builder API request.
+
+## Op-node <> Op-geth (no payload attributes stream)
+
+### Requesting a Block
+
+The proposer op-node requests the block from the builder op-geth, same as the approach with the payload attributes stream.
+
+### Block Building
+ 
+In this approach, block building is triggered by enabling block payload attributes in the `engine_forkchoiceUpdated` call. Payload attributes are populated in this call when sequencer mode is enabled on the builder's op-node. The `engine_getPayload` call from the builder op-node will need to be disabled on the builder op-geth to prevent the builder block from being propagated via p2p.
+
+![Op-node <> Op-geth Interaction](op_node_op_geth_no_stream.png)
+
+**Advantages:**
+* Better latency as the proposer queries the builder payload directly from the builder's op-geth
+* Less modifications on op-node from removing the payload attributes stream
+
+**Disadvantages:**
+* Modifications to both op-node and op-geth to support the builder API. However the builder does not need to run a modified op-node.
 
 ## Op-node <> Op-node
 
@@ -53,16 +70,16 @@ While the op-node can provide the payload attributes via the fork choice update,
 
 In this approach the op-node on the proposer side requests the block from op-node on the builder. Similar to the previous approach, there will be a failsafe mechanism of requesting both the local and builder block. 
 
-However the builder's op-node will return the payload to the proposer by requesting the block from its execution engine via the `engine_getPayload` method.
+However the builder's op-node will return the payload to the proposer by requesting the block from the builder op-geth via the `engine_getPayload` method.
 
 ### Block Building
 
-In this approach, block building is triggered by enabling block payload attributes in the `engine_forkchoiceUpdated` call. Payload attributes are populated in this call when sequencer mode is enabled on the builder's op-node. Additional config will be needed in op-node to prevent the builder block to be propagated via p2p.
+Block building is triggered by enabling block payload attributes in the `engine_forkchoiceUpdated` call. Additional config will be needed in the builder op-node to prevent the builder block to be propagated via p2p on the `engine_getPayload` method.
 
 ![Op-node <> Op-node Interaction](op_node_op_node.png)
 
 **Advantages:**
-* No modifications to op-geth and minimal changes to op-node
+* No modifications to op-geth 
 
 **Disadvantages:**
 * There will still be modifications needed for op-geth for any custom block building logic
@@ -97,14 +114,7 @@ A builder is defined as the tuple (`builderAddress`, `builderUrl`) managed by th
 
 The proposer must sign the request to get the block payload from the builder. The builder must verify the proposer's signature before releasing the payload to prevent transcation leakage. This key will need to be tracked by the builder but will eventually live on the
 L1 [`SystemConfig`](https://github.com/ethereum-optimism/specs/blob/main/specs/protocol/system_config.md)
-where the condig can be queried from a rpc.
-
-## Builder Configuration
-
-A builder is defined as the tuple (`builderPubkey`, `builderUrl`). The Sequencer is responsible for managing this
-tuple, but it will eventually live on the
-L1 [`SystemConfig`](https://github.com/ethereum-optimism/specs/blob/main/specs/protocol/system_config.md)
-where changes are emitted as an event. ***Builder's have no restriction or policies enforced on them at this time.***
+where the config can be queried from a rpc.
 
 ## Mempool Forwarding
 
