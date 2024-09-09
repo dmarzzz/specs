@@ -23,7 +23,9 @@
 
 ## Overview
 
-The following provides several options of the Builder API within the Optimism stack. It outlines the advantages and disadvantages of different Sequencer Builder interactions.
+The following outlines several options for the Builder API around the Sequencer Builder interaction and the pros and cons of each approach. The main areas of design decisions are:
+* How does the proposer builder communication happen?
+* Where is the builder API implemented?
 
 ## Op-node <> Op-geth (payload attributes stream)
 
